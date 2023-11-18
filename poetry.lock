@@ -2,14 +2,14 @@
 
 [[package]]
 name = "actionweaver"
-version = "0.0.12"
+version = "0.0.14"
 description = "An Application Framework for Building LLM Agents"
 category = "main"
 optional = false
 python-versions = ">=3.9,<4.0"
 files = [
-    {file = "actionweaver-0.0.12-py3-none-any.whl", hash = "sha256:00fa5b28cfa06700ca73de568be4d8c3c0221a79761d75d2af7468d12b748830"},
-    {file = "actionweaver-0.0.12.tar.gz", hash = "sha256:a5af897d8c96a29d892bc1c44e1fea2b0f1a1cd38a0ec6cb83a2183301ca2d18"},
+    {file = "actionweaver-0.0.14-py3-none-any.whl", hash = "sha256:fb170154dd61dd0205d8ff2b60e902eb06715e49675925340ce016d015ca5532"},
+    {file = "actionweaver-0.0.14.tar.gz", hash = "sha256:f484230f4323b0578a609c30efb49639c39f15b84ffd62c29af1b9e9c14ee82f"},
 ]
 
 [package.dependencies]
@@ -5269,4 +5269,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<3.9.7 || >3.9.7,<4.0"
-content-hash = "2f9562135bddb12d0e598eb40bdf1dbf4e23f126ce8d137670175ca141e64dcb"
+content-hash = "3c1a5220537138fcebf5eabcb03316470556b3a0d4055da3a266133ebea087c3"
