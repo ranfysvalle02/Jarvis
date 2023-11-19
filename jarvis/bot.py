@@ -4,19 +4,28 @@ import uuid
 from collections.abc import Iterable
 from typing import List, Optional
 
-import chromadb
 import openai
 import requests
 from actionweaver import action
-from actionweaver.llms.openai.chat import OpenAIChatCompletion
+from actionweaver.llms.azure.chat import ChatCompletion
 from actionweaver.llms.openai.tokens import TokenUsageTracker
 from bs4 import BeautifulSoup
-from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 from constants import AUDIO_INPUT, AUDIO_OUTPUT
 from openai import OpenAI
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+from langchain.vectorstores import MongoDBAtlasVectorSearch
+from langchain.embeddings import GPT4AllEmbeddings
+from langchain.document_loaders import PlaywrightURLLoader
 
+openai.api_key = ""
+openai.api_version = "2023-10-01-preview"
+openai.api_type = "azure"
+
+import pymongo 
+
+MONGODB_URI = ""  
+DATABASE_NAME = ""  
+COLLECTION_NAME = ""
 
 from dataclasses import dataclass
 
@@ -40,13 +49,20 @@ class JarvisBot:
         self.logger = logger
         self.st = st
         self.token_tracker = TokenUsageTracker(budget=3000, logger=logger)
-        self.llm = OpenAIChatCompletion(
-            "gpt-4-1106-preview", token_usage_tracker=self.token_tracker, logger=logger
-        )
-        self.chroma_client = chromadb.Client()
-        self.collection = self.chroma_client.create_collection(
-            name="my_collection", embedding_function=OpenAIEmbeddingFunction()
-        )
+        self.llm = ChatCompletion(
+            model="gpt-4", azure_deployment="gpt-4",
+            azure_endpoint="https://.openai.azure.com/", api_key="",
+            api_version="2023-10-01-preview", 
+            token_usage_tracker = TokenUsageTracker(budget=2000, logger=logger), 
+            logger=logger)
+
+        self.mongodb_client = pymongo.MongoClient(MONGODB_URI)
+        self.gpt4all_embd = GPT4AllEmbeddings()
+        self.client = pymongo.MongoClient(MONGODB_URI)
+        self.db = self.client[DATABASE_NAME]  
+        self.collection = self.db[COLLECTION_NAME]  
+        self.vectorstore = MongoDBAtlasVectorSearch(self.collection, self.gpt4all_embd)  
+        self.index = self.vectorstore.from_documents([], self.gpt4all_embd, collection=self.collection)
 
         self.audio_input = None
         self.text_input = None
@@ -121,33 +137,18 @@ class JarvisBot:
         return response
 
     def recall(self, text):
-        """
-        Recall info from your knowledge base.
-
-        Parameters
-        ----------
-        text : str
-            The query text used to search the agent's knowledge base.
-
-        Returns
-        -------
-        str
-            A response containing relevant information retrieved from the knowledge base along with sources.
-            If no information is found, it returns "No information on that topic."
-        """
-
-        response = self.collection.query(query_texts=[text], n_results=3)
-
-        ret = []
-
-        if len(response["distances"][0]) > 0:
-            ret = [
-                doc[0]
-                for dist, doc in zip(response["distances"], response["documents"])
-                if dist[0] < 1
-            ]
-
-        return "\n".join(ret) if len(ret) > 0 else "No information on that topic."
+        response = self.index.similarity_search_with_score(text) 
+        str_response = []
+        for vs in response:
+            score = vs[1]
+            v = vs[0]
+            print("URL"+v.metadata["source"]+";"+str(score))
+            str_response.append({"URL":v.metadata["source"],"content":v.page_content[:800]})
+        
+        if len(str_response)>0:
+            return f"VectorStore Search Results (source=URL):\n{str_response}"[:5000]
+        else:
+            return "No information on that topic"
 
     @action(name="AnswerQuestion", stop=True)
     def answer_question(self, query: str):
@@ -240,7 +241,9 @@ class JarvisBot:
 
         if len(text) > 0:
             with self.st.spinner(f"Learning.."):
-                self.collection.add(**chunk(text))
+                self.index.add_documents(
+                        **chunk(text)
+                ) 
 
         if len(urls) > 0:
             with self.st.spinner(f"Learning the content in {urls}"):
@@ -260,7 +263,7 @@ class JarvisBot:
                         # Extract and print the text from the <p> tags
                         for paragraph in paragraphs:
                             if len(paragraph.text) > 0:
-                                self.collection.add(**chunk(paragraph.text))
+                                self.index.add_documents(**chunk(paragraph.text))
 
         return f"Content has been learned."
 
@@ -279,4 +282,4 @@ if __name__ == "__main__":
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
 
-    agent = RAGBot(logger, None)
+    agent = JarvisBot(logger, None)
